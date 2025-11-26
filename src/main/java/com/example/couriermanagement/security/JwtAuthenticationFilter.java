@@ -20,6 +20,9 @@ import java.util.Optional;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final String bearer_prefix = "Bearer ";
+    private static final String role_prefix = "ROLE_";
+
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
 
@@ -37,13 +40,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         
         String authHeader = request.getHeader("Authorization");
         
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (authHeader == null || !authHeader.startsWith(bearer_prefix)) {
             filterChain.doFilter(request, response);
             return;
         }
 
         try {
-            String token = authHeader.substring(7);
+            String token = authHeader.substring(bearer_prefix.length());
             String username = jwtUtil.extractUsername(token);
             
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -52,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 if (userOptional.isPresent() && jwtUtil.validateToken(token, username)) {
                     User user = userOptional.get();
                     List<SimpleGrantedAuthority> authorities = List.of(
-                        new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
+                        new SimpleGrantedAuthority(role_prefix + user.getRole().name())
                     );
                     
                     UsernamePasswordAuthenticationToken authentication = 

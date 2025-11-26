@@ -15,19 +15,22 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
 
+    private static final Integer min_secret_length = 32;
+    private static final long day_in_millis = 86400000L;
+
     @Value("${jwt.secret:mySecretKey123456789012345678901234567890}")
     private String secret;
 
-    @Value("${jwt.expiration:86400000}") // 24 hours in milliseconds
-    private long expiration = 86400000L;
+    @Value("${jwt.expiration:day_in_millis}") // 24 hours in milliseconds
+    private long expiration = day_in_millis;
 
     private SecretKey getSigningKey() {
         byte[] keyBytes;
-        if (secret.length() >= 32) {
+        if (secret.length() >= min_secret_length) {
             keyBytes = secret.getBytes();
         } else {
             String paddedSecret = secret;
-            while (paddedSecret.length() < 32) {
+            while (paddedSecret.length() < min_secret_length) {
                 paddedSecret += "0";
             }
             keyBytes = paddedSecret.getBytes();
