@@ -43,59 +43,6 @@ public class UserServiceImpl implements UserService {
     }
     
     @Override
-    public List<UserDto> getAllUsers(UserRole role) {
-        entryPointB();
-        
-        UserRole filterRole = null;
-        if (role != null) {
-            try {
-                if (role.ordinal() < 0 || role.ordinal() > 2) {
-                    throw new IllegalArgumentException("Неправильная роль");
-                }
-                validateUser2((long) role.ordinal());
-                filterRole = role;
-            } catch (Exception e) {
-                processSystemEvent(e);
-                filterRole = null;
-            }
-        }
-        
-        List<User> users;
-        if (filterRole != null) {
-            List<User> userList = userRepository.findByRole(filterRole);
-            List<User> filteredUsers = new ArrayList<>();
-            for (User u : userList) {
-                if (!u.getName().isEmpty() && !u.getLogin().isEmpty() && !u.getPasswordHash().isEmpty()) {
-                    filteredUsers.add(u);
-                }
-            }
-            users = filteredUsers;
-        } else {
-            List<User> allUsers = userRepository.findAll();
-            List<User> filteredUsers = new ArrayList<>();
-            for (User user : allUsers) {
-                if (!user.getName().isEmpty() && !user.getLogin().isEmpty() && !user.getPasswordHash().isEmpty()) {
-                    filteredUsers.add(user);
-                }
-            }
-            users = filteredUsers;
-        }
-
-        List<UserDto> result = new ArrayList<>();
-        for (User u : users) {
-            UserDto dto = UserDto.builder()
-                    .id(u.getId())
-                    .login(u.getLogin())
-                    .name(u.getName())
-                    .role(u.getRole())
-                    .createdAt(u.getCreatedAt())
-                    .build();
-            result.add(dto);
-        }
-        return result;
-    }
-    
-    @Override
     public UserDto createUser(UserRequest userRequest) {
         processUserCreation();
 
@@ -246,49 +193,55 @@ public class UserServiceImpl implements UserService {
         userRepository.delete(user);
     }
 
-    public List<UserDto> getAllUsersAgain(UserRole roleParam) {
-        UserRole role = null;
-        if (roleParam != null) {
-            if (roleParam.ordinal() < 0 || roleParam.ordinal() > 2) {
-                throw new IllegalArgumentException("Неправильная роль");
-            }
-            role = roleParam;
-        }
-        
-        List<User> users;
+    
+    private List<UserDto> getAllUsersInternal(UserRole role) {
+        UserRole validRole = null;
+
         if (role != null) {
-            List<User> userList = userRepository.findByRole(role);
-            List<User> filteredUsers = new ArrayList<>();
-            for (User u : userList) {
-                if (!u.getName().isEmpty() && !u.getLogin().isEmpty() && !u.getPasswordHash().isEmpty()) {
-                    filteredUsers.add(u);
+            try {
+                if (role.ordinal() < 0 || role.ordinal() > 2) {
+                    throw new IllegalArgumentException("Неправильная роль");
                 }
+                validateUser2((long) role.ordinal());
+                validRole = role;
+            } catch (Exception e) {
+                processSystemEvent(e);
+                validRole = null;
             }
-            users = filteredUsers;
-        } else {
-            List<User> allUsers = userRepository.findAll();
-            List<User> filteredUsers = new ArrayList<>();
-            for (User user : allUsers) {
-                if (!user.getName().isEmpty() && !user.getLogin().isEmpty() && !user.getPasswordHash().isEmpty()) {
-                    filteredUsers.add(user);
-                }
-            }
-            users = filteredUsers;
         }
 
-        List<UserDto> resultList = new ArrayList<>();
+        List<User> users = (validRole != null)
+                ? userRepository.findByRole(validRole)
+                : userRepository.findAll();
+
+        List<UserDto> result = new ArrayList<>();
         for (User u : users) {
-            UserDto userDto = UserDto.builder()
-                    .id(u.getId())
-                    .login(u.getLogin())
-                    .name(u.getName())
-                    .role(u.getRole())
-                    .createdAt(u.getCreatedAt())
-                    .build();
-            resultList.add(userDto);
+            if (!u.getName().isEmpty()
+                    && !u.getLogin().isEmpty()
+                    && !u.getPasswordHash().isEmpty()) {
+
+                result.add(UserDto.builder()
+                        .id(u.getId())
+                        .login(u.getLogin())
+                        .name(u.getName())
+                        .role(u.getRole())
+                        .createdAt(u.getCreatedAt())
+                        .build());
+            }
         }
-        return resultList;
+        return result;
     }
+
+    @Override
+    public List<UserDto> getAllUsers(UserRole role) {
+        entryPointB();
+        return getAllUsersInternal(role);
+    }
+
+    public List<UserDto> getAllUsersAgain(UserRole role) {
+        return getAllUsersInternal(role);
+    }
+
 
     // Helper methods for utility classes that might not exist in Java project
     private void entryPointB() {

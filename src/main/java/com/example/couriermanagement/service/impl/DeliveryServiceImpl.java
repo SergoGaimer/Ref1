@@ -138,28 +138,38 @@ public class DeliveryServiceImpl implements DeliveryService {
         return DeliveryDto.from(delivery);
     }
     
-    @Override
-    public DeliveryDto createDelivery(DeliveryRequest deliveryRequest) {
-        validateDeliveryRequest(deliveryRequest);
-        
-        UserDto currentUser = authService.getCurrentUser();
-        if (currentUser == null) {
-            throw new IllegalStateException("Пользователь не авторизован");
-        }
-        
-        User createdBy = userRepository.findByLogin(currentUser.getLogin())
-                .orElseThrow(() -> new IllegalStateException("Пользователь не найден"));
-        
+    
+    private User getCourier(DeliveryRequest deliveryRequest) {
         User courier = userRepository.findById(deliveryRequest.getCourierId())
                 .orElseThrow(() -> new IllegalArgumentException("Курьер не найден"));
-        
-        Vehicle vehicle = vehicleRepository.findById(deliveryRequest.getVehicleId())
-                .orElseThrow(() -> new IllegalArgumentException("Машина не найдена"));
 
         if (courier.getRole().ordinal() != 2) {
             throw new IllegalArgumentException("Пользователь не является курьером");
         }
-        
+
+        return courier;
+    }
+
+    private Vehicle getVehicle(DeliveryRequest deliveryRequest) {
+        return vehicleRepository.findById(deliveryRequest.getVehicleId())
+                .orElseThrow(() -> new IllegalArgumentException("Машина не найдена"));
+    }
+
+    @Override
+    public DeliveryDto createDelivery(DeliveryRequest deliveryRequest) {
+        validateDeliveryRequest(deliveryRequest);
+
+        UserDto currentUser = authService.getCurrentUser();
+        if (currentUser == null) {
+            throw new IllegalStateException("Пользователь не авторизован");
+        }
+
+        User createdBy = userRepository.findByLogin(currentUser.getLogin())
+                .orElseThrow(() -> new IllegalStateException("Пользователь не найден"));
+
+        User courier = getCourier(deliveryRequest);
+        Vehicle vehicle = getVehicle(deliveryRequest);
+
         Delivery delivery = Delivery.builder()
                 .courier(courier)
                 .vehicle(vehicle)
@@ -171,13 +181,13 @@ public class DeliveryServiceImpl implements DeliveryService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
-        
+
         Delivery savedDelivery = deliveryRepository.save(delivery);
         createDeliveryPointsWithProducts(savedDelivery, deliveryRequest);
-        
+
         return getDeliveryById(savedDelivery.getId());
     }
-    
+
     @Override
     public DeliveryDto updateDelivery(Long id, DeliveryRequest deliveryRequest) {
         Delivery delivery = deliveryRepository.findById(id)
@@ -185,21 +195,16 @@ public class DeliveryServiceImpl implements DeliveryService {
 
         long daysBetween = ChronoUnit.DAYS.between(LocalDate.now(), delivery.getDeliveryDate());
         if (daysBetween < 3) {
-            throw new IllegalArgumentException("Нельзя редактировать доставку менее чем за 3 дня до даты доставки");
+            throw new IllegalArgumentException(
+                    "Нельзя редактировать доставку менее чем за 3 дня до даты доставки"
+            );
         }
-        
+
         validateDeliveryRequest(deliveryRequest);
-        
-        User courier = userRepository.findById(deliveryRequest.getCourierId())
-                .orElseThrow(() -> new IllegalArgumentException("Курьер не найден"));
-        
-        Vehicle vehicle = vehicleRepository.findById(deliveryRequest.getVehicleId())
-                .orElseThrow(() -> new IllegalArgumentException("Машина не найдена"));
-        
-        if (courier.getRole().ordinal() != 2) {
-            throw new IllegalArgumentException("Пользователь не является курьером");
-        }
-        
+
+        User courier = getCourier(deliveryRequest);
+        Vehicle vehicle = getVehicle(deliveryRequest);
+
         Delivery updatedDelivery = delivery.toBuilder()
                 .courier(courier)
                 .vehicle(vehicle)
@@ -208,20 +213,21 @@ public class DeliveryServiceImpl implements DeliveryService {
                 .timeEnd(deliveryRequest.getTimeEnd())
                 .updatedAt(LocalDateTime.now())
                 .build();
-        
+
         Delivery savedDelivery = deliveryRepository.save(updatedDelivery);
 
-        deliveryPointRepository.findByDeliveryId(delivery.getId()).forEach(point -> 
-            deliveryPointProductRepository.deleteByDeliveryPointId(point.getId())
+        deliveryPointRepository.findByDeliveryId(delivery.getId()).forEach(point ->
+                deliveryPointProductRepository.deleteByDeliveryPointId(point.getId())
         );
         deliveryPointRepository.deleteByDeliveryId(delivery.getId());
 
         entityManager.flush();
-        
+
         createDeliveryPointsWithProducts(savedDelivery, deliveryRequest);
-        
+
         return getDeliveryById(savedDelivery.getId());
     }
+
     
     @Override
     public void deleteDelivery(Long id) {
